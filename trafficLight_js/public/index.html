@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+    <head>
+        <script type="module">
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/9.12.1/firebase-app.js";
+            import { getDatabase, ref, set, get, child, onValue } from "https://www.gstatic.com/firebasejs/9.12.1/firebase-database.js";
+
+            const firebaseConfig = {
+                apiKey: "AIzaSyBt0s4jGLD1k3_p8SfGS4yhoil0BKmZgKE",
+                authDomain: "budget-kahoot.firebaseapp.com",
+                databaseURL: "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app",
+                projectId: "budget-kahoot",
+                storageBucket: "budget-kahoot.appspot.com",
+                messagingSenderId: "332478696005",
+                appId: "1:332478696005:web:2b6adcec8ceeb90b4c312c"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            const dbRef = ref(getDatabase());
+            const db = getDatabase();
+
+            let trafficLightId = 0;
+
+            let cycleLength;
+            let automatic;
+            let worker = null;
+            let dbStartTime = 0;
+
+            let cyclicUrl = "https://nice-cyan-goose-hat.cyclic.app/get_start_time"
+
+            let checkTimeInterval;
+            let offset;
+
+            async function startInterval() {
+                const cycleRef = ref(db);
+                const data = (await get(ref(db, 'traffic_lights/'))).val();
+
+                if (automatic == 0) {
+                    yellowBlinking();
+                } else {
+                    console.log("intervalled: " + data.cycleLength);
+                    let startTime = (new Date()).getTime();
+                    trafficLightCycle(startTime, data.cycleLength);
+                    let cycleInterval = setInterval(function() {
+                        let startTime = (new Date()).getTime();
+                        trafficLightCycle(startTime, data.cycleLength);
+                    }, data.cycleLength)
+                }
+            }
+
+            function updateData(cycLength, autom) {
+                cycleLength = cycLength;
+                automatic = autom;
+            }
+
+            function yellowBlinking() {
+                console.log("test");
+                document.getElementById("redLight").style.backgroundColor = "black";
+                document.getElementById("yellowLight").style.backgroundColor = "black";
+                document.getElementById("greenLight").style.backgroundColor = "black";
+                document.getElementById("pedestrianGreen").style.backgroundColor = "black";
+                document.getElementById("pedestrianRed").style.backgroundColor = "black";
+
+                for (let i = 0; i < 4; i++) {
+                    document.getElementById("yellowLight").style.backgroundColor = "yellow";
+                    setTimeout(function() {
+                        document.getElementById("yellowLight").style.backgroundColor = "black";
+                    }, 500)
+                }
+            }
+
+            function stopTimer()
+            {
+                worker.terminate();
+                timerStart = true;
+                worker = null;
+            }
+
+            function handlePedestrianTraffic(timer, length) {
+                if (timer < length && timer > length / 1.5) {
+                    document.getElementById("pedestrianGreen").style.backgroundColor = "green";
+                    document.getElementById("pedestrianRed").style.backgroundColor = "black";
+                } else {
+                    document.getElementById("pedestrianRed").style.backgroundColor = "red";
+                    document.getElementById("pedestrianGreen").style.backgroundColor = "black";
+                }   
+            }
+
+            async function trafficLightCycle(startTime, cycleLength) {
+                const cycleRef = ref(db);
+                const data = (await get(ref(db, 'traffic_lights/startTime'))).val();
+                let timeDiff = data.time - Date.now();
+                console.log(timeDiff);
+                setTimeout(function() {
+                    let lengthInSeconds = cycleLength / 1000;
+                    if (worker == null) {
+                        worker = new Worker("timer.js");
+                    }
+                    worker.onmessage = function(event) {
+                        worker.postMessage(lengthInSeconds);
+                        // 0 - 2.5
+                        if (event.data < lengthInSeconds / 4) {
+                            document.getElementById("redLight").style.backgroundColor = "red";
+                        } else if (event.data < lengthInSeconds / 3 && event.data > lengthInSeconds / 4) {
+                            document.getElementById("redLight").style.backgroundColor = "black";
+                            document.getElementById("yellowLight").style.backgroundColor = "yellow";
+                        } else if (event.data < lengthInSeconds / 1.5 && event.data > lengthInSeconds / 3) {
+                            document.getElementById("redLight").style.backgroundColor = "black";
+                            document.getElementById("yellowLight").style.backgroundColor = "black";
+                            document.getElementById("greenLight").style.backgroundColor = "green";
+                        } else {
+                            document.getElementById("redLight").style.backgroundColor = "red";
+                            document.getElementById("yellowLight").style.backgroundColor = "black";
+                            document.getElementById("greenLight").style.backgroundColor = "black";
+                        }
+    
+                        handlePedestrianTraffic(event.data, lengthInSeconds);                    
+                    }
+                }, timeDiff)
+            }
+
+            function getRemainingTime(startTime, cycleLength){
+                return  cycleLength - ( (new Date()).getTime() - startTime );
+            }
+
+            function writeStartTime() {
+                const db = getDatabase();
+                set(ref(db, 'traffic_lights/startTime'), {
+                    time: Date.now() + 10000
+                });
+            }
+
+            async function getStartTime() {
+                const response = await fetch(cyclicUrl, {});
+                const json = await response.json();
+
+                return json.start;
+            }
+
+            function checkTime(offsetTime) {
+                let now = Date.now();
+                let timeDifference = offsetTime - now;
+                console.log(timeDifference);
+                setTimeout(function() {
+                    startInterval();
+                }, timeDifference)
+            }
+
+            function getDataFromDb() {
+                let data;
+                const cycleRef = ref(db, 'traffic_lights');
+                onValue(cycleRef, (snapshot) => {
+                    data = snapshot.val();
+                    let timeDiff = data.startTime.time - Date.now();
+                    setTimeout(function() {
+                        startInterval();
+                        let startTime = (new Date()).getTime();
+                        trafficLightCycle(startTime, cycleLength);
+                    }, timeDiff);
+                })
+            }
+
+            const offsetTime = await getStartTime();
+            checkTime(offsetTime);
+        </script>
+        <link rel="stylesheet" type="text/css" href="style.css" />
+    </head>
+
+    <body> 
+        <div id="lights" class="lights">
+            <div id="trafficLight">
+                 <div id="redLight" class="bulb"></div>
+                 <div id="yellowLight" class="bulb"></div>
+                 <div id="greenLight" class="bulb"></div>
+            </div>
+     
+            <div id="pedestrianLight">
+                 <div id="pedestrianRed" class="bulb"></div>
+                 <div id="pedestrianGreen" class="bulb"></div>
+            </div>
+        </div>
+    </body>
+</html>
+
+
+
+<!-- if (event.data < lengthInSeconds / 8) {
+                        document.getElementById("redLight").style.backgroundColor = "red";
+                    } else if (event.data < lengthInSeconds / 6 && event.data > lengthInSeconds / 8) {
+                        document.getElementById("redLight").style.backgroundColor = "black";
+                        document.getElementById("yellowLight").style.backgroundColor = "yellow";
+                    } else if (event.data < lengthInSeconds / 3 && event.data > lengthInSeconds / 6) {
+                        document.getElementById("redLight").style.backgroundColor = "black";
+                        document.getElementById("yellowLight").style.backgroundColor = "black";
+                        document.getElementById("greenLight").style.backgroundColor = "green";
+                    } else {
+                        document.getElementById("redLight").style.backgroundColor = "red";
+                        document.getElementById("yellowLight").style.backgroundColor = "black";
+                        document.getElementById("greenLight").style.backgroundColor = "black";
+                    } -->

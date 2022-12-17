@@ -16,7 +16,13 @@
 #define LED_RP D5
 #define LED_GP D3
 
-const uint8_t fingerprint[20] = {0x5a, 0x12, 0xca, 0xb5, 0x35, 0x69, 0x04, 0x81, 0xe6, 0x1f, 0x8a, 0x3d, 0xba, 0xf1, 0x87, 0x1a, 0x24, 0xa5, 0x40, 0x64};
+#define WIFI_SSID "#Telia-89E1CC"
+#define WIFI_PASS "nzuZ9Eyx7wfzhmeY"
+
+const uint8_t fingerprintFb[20] = {0x5a, 0x12, 0xca, 0xb5, 0x35, 0x69, 0x04, 0x81, 0xe6, 0x1f, 0x8a, 0x3d, 0xba, 0xf1, 0x87, 0x1a, 0x24, 0xa5, 0x40, 0x64};
+const uint8_t fingerprintDo[20] = {0xAA, 0x97, 0x76, 0x9D, 0xD6, 0xB8, 0x8B, 0xAA, 0xA0, 0x3C, 0xB5, 0x7B, 0xDE, 0x76, 0x62, 0x84, 0xC0, 0x19, 0xEC, 0xA0};
+// Kui Digitalocean fingerprinti kasutada, siis saab katte, aga siis annab firebase 403
+
 ESP8266WiFiMulti WiFiMulti;
 
 enum CycleType {
@@ -55,36 +61,11 @@ void calculateLightLengths() {
   green_blink_length = cycle_length * 0.033;
 }
 
-// Siit ka url ara muuta
-void getStartTime() {
-  const char* traffic_lights_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/states/0.json";
-  if (WiFiMulti.run() == WL_CONNECTED) {
-    std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-    client->setFingerprint(fingerprint);
-    HTTPClient https;
-
-    if (https.begin(*client, traffic_lights_url)) {
-      int httpCode = https.GET();
-      Serial.print("Status code: ");
-      Serial.println(httpCode);
-
-      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-        String payload = https.getString();
-        Serial.println(payload);
-        if (payload == "1") {
-          state = START;
-        }
-      }
-    }
-  } 
-}
-
 void sendStartTime() {
-  // const char* traffic_lights_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/arduinoStarts/1.json";
-  const char* send_start_url = "https://nice-cyan-goose-hat.cyclic.app/arduino_start/0";
+  const char* send_start_url = "https://orca-app-tlr83.ondigitalocean.app/arduino_start/0";
   if (WiFiMulti.run() == WL_CONNECTED) {
     std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-    client->setFingerprint(fingerprint);
+    client->setFingerprint(fingerprintDo);
     HTTPClient https;
 
     if (https.begin(*client, send_start_url)) {
@@ -116,8 +97,15 @@ void setup() {
   Serial.begin(115200);
   state = CycleState::START;
 
-  WiFi.mode(WIFI_STA);
-  WiFiMulti.addAP("TLU", "");
+  delay(2000);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    Serial.println(".");
+  }
 
   delay(2000);
   sendStartTime();
@@ -169,8 +157,6 @@ void pedestrianLight(int pedestrian_input, CycleState cycle_state) {
 
 
 void regularCycle(int current_millis) {
-
-
   if (state == START) {
     cycle_start = millis();
 
@@ -230,17 +216,15 @@ void regularCycle(int current_millis) {
 const uint16_t traffic_light_id = 1;
 
 const char* cycle_length_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/cycleLength.json";
-const char* yellow_toggle_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_light/yellow_mode/.json";
-const char* start_time_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/arduinoNextOffsets/1.json";
+const char* yellow_toggle_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/yellowState/0.json";
+const char* start_time_url = "https://orca-app-tlr83.ondigitalocean.app/get_arduino_start/0";
 
 void loop() {
   time_t time = now();
   startMillis = millis();
-  Serial.print("Cycle_start: ");
-  Serial.println(startMillis);
   if (WiFiMulti.run() == WL_CONNECTED) {
     std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-    client->setFingerprint(fingerprint);
+    client->setFingerprint(fingerprintDo);
     HTTPClient https;
 
     Serial.println("Getting start time for Arduino....");
@@ -250,20 +234,24 @@ void loop() {
       Serial.println(httpCode);
 
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-        Serial.print("Payload: ");
+        StaticJsonDocument<200> doc;
         String payload = https.getString();
-        Serial.println(payload);
-        offsetTime = payload.toInt();
+        DeserializationError error = deserializeJson(doc, payload);
+        // if (error) {
+        //   Serial.print(F("deserializeJson() failed: "));
+        //   Serial.println(error.f_str());
+        //   return;
+        // }
+        String startTime = doc["start"];
+        offsetTime = startTime.toInt();
+        Serial.println("offsetTime: " + offsetTime);
+        Serial.println("startTime: " + startMillis);
       }
     }
 
-    Serial.print("StartMillis: ");
-    Serial.print(startMillis);
-    Serial.print("offsetTime: ");
-    Serial.print(offsetTime);
-
     if (startMillis > offsetTime) {
       Serial.println("Starting GET req for yellow_toggle_url");
+      // client->setFingerprint(fingerprintFb);
       if (https.begin(*client, yellow_toggle_url)) {
         int httpCode = https.GET();
         Serial.print("Status code: ");
@@ -316,6 +304,8 @@ void loop() {
         break;
       }
     }
+  } else {
+    Serial.println("Wifi not connected");
   }
 }
 

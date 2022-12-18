@@ -1,6 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get } from 'firebase/database';
 
+const api_url = 'https://orca-app-tlr83.ondigitalocean.app/';
+
+
 const firebaseConfig = {
     apiKey: "AIzaSyBt0s4jGLD1k3_p8SfGS4yhoil0BKmZgKE",
     authDomain: "budget-kahoot.firebaseapp.com",
@@ -151,7 +154,7 @@ const resetCycle = async () => {
 
 const fetchInitialStartTime = async () => {
     const light_id  = location.pathname.split('/')[1];
-    const response = await fetch(`https://orca-app-tlr83.ondigitalocean.app/get_start_time/${Number(light_id)}`);
+    const response = await fetch(api_url + Number(light_id));
     const data = await response.json();
 
     console.log(data);
@@ -161,17 +164,18 @@ const fetchInitialStartTime = async () => {
 const fetchStartTime = () => {
     console.log('fetchingStartTime');
     const light_id  = location.pathname.split('/')[1];
-    fetch(`https://orca-app-tlr83.ondigitalocean.app/get_start_time/${Number(light_id)}`).then((response) => {
+    fetch(api_url + Number(light_id)).then((response) => {
         response.json().then((data) => {
             console.log('new start_time: ', data.start);
             next_start_time = data.start;
-            fetched_next_start = true;
         }).catch((err) => {
             console.error('Error while parsing json: ', err);
         });
     }).catch((err) => {
         console.error('Error while fetching startTime: ', err);
     });
+
+    fetched_next_start = true;
 }
 
 const isOffsetLessAtnIndexFromLast = (elapsed_time, n) => {

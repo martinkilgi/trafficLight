@@ -19,7 +19,7 @@
 #define WIFI_SSID "#Telia-89E1CC"
 #define WIFI_PASS "nzuZ9Eyx7wfzhmeY"
 
-const uint8_t fingerprintFb[20] = {0x5a, 0x12, 0xca, 0xb5, 0x35, 0x69, 0x04, 0x81, 0xe6, 0x1f, 0x8a, 0x3d, 0xba, 0xf1, 0x87, 0x1a, 0x24, 0xa5, 0x40, 0x64};
+// const uint8_t fingerprintFb[20] = {0x5a, 0x12, 0xca, 0xb5, 0x35, 0x69, 0x04, 0x81, 0xe6, 0x1f, 0x8a, 0x3d, 0xba, 0xf1, 0x87, 0x1a, 0x24, 0xa5, 0x40, 0x64};
 const uint8_t fingerprintDo[20] = {0xAA, 0x97, 0x76, 0x9D, 0xD6, 0xB8, 0x8B, 0xAA, 0xA0, 0x3C, 0xB5, 0x7B, 0xDE, 0x76, 0x62, 0x84, 0xC0, 0x19, 0xEC, 0xA0};
 // Kui Digitalocean fingerprinti kasutada, siis saab katte, aga siis annab firebase 403
 
@@ -53,6 +53,15 @@ int cycle_start = millis();
 unsigned long offsetTime;
 unsigned long startMillis;
 CycleState state;
+
+// Set your Static IP address
+IPAddress local_IP(192, 168, 1, 33);
+// Set your Gateway IP address
+IPAddress gateway(192, 168, 1, 1);
+
+IPAddress subnet(255, 255, 0, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
 
 void calculateLightLengths() {
   red_length = cycle_length * 0.5;
@@ -96,6 +105,10 @@ void setup() {
 
   Serial.begin(115200);
   state = CycleState::START;
+
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("STA Failed to configure");
+  }
 
   delay(2000);
 
@@ -215,8 +228,8 @@ void regularCycle(int current_millis) {
 
 const uint16_t traffic_light_id = 1;
 
-const char* cycle_length_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/cycleLength.json";
-const char* yellow_toggle_url = "https://budget-kahoot-default-rtdb.europe-west1.firebasedatabase.app/traffic_lights/yellowState/0.json";
+const char* cycle_length_url = "https://orca-app-tlr83.ondigitalocean.app/get_cycle_length";
+const char* yellow_toggle_url = "https://orca-app-tlr83.ondigitalocean.app/get_yellow_state/0";
 const char* start_time_url = "https://orca-app-tlr83.ondigitalocean.app/get_arduino_start/0";
 
 void loop() {
@@ -234,9 +247,11 @@ void loop() {
       Serial.println(httpCode);
 
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+        Serial.print("Offset: ");
         StaticJsonDocument<200> doc;
         String payload = https.getString();
         DeserializationError error = deserializeJson(doc, payload);
+        Serial.print(payload);
         // if (error) {
         //   Serial.print(F("deserializeJson() failed: "));
         //   Serial.println(error.f_str());
@@ -244,28 +259,27 @@ void loop() {
         // }
         String startTime = doc["start"];
         offsetTime = startTime.toInt();
-        Serial.println("offsetTime: " + offsetTime);
-        Serial.println("startTime: " + startMillis);
       }
     }
 
     if (startMillis > offsetTime) {
       Serial.println("Starting GET req for yellow_toggle_url");
-      // client->setFingerprint(fingerprintFb);
       if (https.begin(*client, yellow_toggle_url)) {
         int httpCode = https.GET();
         Serial.print("Status code: ");
         Serial.println(httpCode);
 
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          StaticJsonDocument<200> doc;
           Serial.print("Payload: ");
           String payload = https.getString();
-          Serial.println(payload);
-          if (payload == "1" && cycle_type == CycleType::REGULAR) {
+          DeserializationError error = deserializeJson(doc, payload);
+          String state = doc["state"];
+          if (state == "1" && cycle_type == CycleType::REGULAR) {
             resetLights();
             cycle_type = CycleType::NIGHT;
           }
-          if (payload == "0" && cycle_type == CycleType::NIGHT) {
+          if (state == "0" && cycle_type == CycleType::NIGHT) {
             state = START;
             cycle_type = CycleType::REGULAR;
           }
@@ -279,11 +293,13 @@ void loop() {
         Serial.println(httpCode);
 
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          StaticJsonDocument<200> doc;
           Serial.print("Payload: ");
           String payload = https.getString();
+          DeserializationError error = deserializeJson(doc, payload);
           Serial.println(payload);
-
-          int payload_i = payload.toInt();
+          String cycLength = doc["cycleLength"];
+          int payload_i = cycLength.toInt();
           if (cycle_length != payload_i) {
             cycle_length = payload_i;
             calculateLightLengths();
@@ -308,6 +324,3 @@ void loop() {
     Serial.println("Wifi not connected");
   }
 }
-
-// nice-cyan-goose-hat.cyclic.app
-// Muidu tootab, aga jalakaija roheline ei lahe polema

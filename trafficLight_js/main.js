@@ -151,7 +151,7 @@ const resetCycle = async () => {
 
 const fetchInitialStartTime = async () => {
     const light_id  = location.pathname.split('/')[1];
-    const response = await fetch(`http://localhost:3000/get_start_time/${Number(light_id)}`);
+    const response = await fetch(`https://orca-app-tlr83.ondigitalocean.app/get_start_time/${Number(light_id)}`);
     const data = await response.json();
 
     console.log(data);
@@ -161,7 +161,7 @@ const fetchInitialStartTime = async () => {
 const fetchStartTime = () => {
     console.log('fetchingStartTime');
     const light_id  = location.pathname.split('/')[1];
-    fetch(`http://localhost:3000/get_start_time/${Number(light_id)}`).then((response) => {
+    fetch(`https://orca-app-tlr83.ondigitalocean.app/get_start_time/${Number(light_id)}`).then((response) => {
         response.json().then((data) => {
             console.log('new start_time: ', data.start);
             next_start_time = data.start;

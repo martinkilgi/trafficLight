@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite App</title>
+  </head>
+  <body>
+    <body id="main-container">
+        <div id="main-light">
+            <h5>Auto tuli</h5>
+            <svg class="traffic_light">
+                <g stroke="black" fill="#333">
+                   <path d="m10 10 l 0 510 l 200 0 l 0 -510 z"></path>
+                   <path fill="#444" d="m20 20 l 0 490 l 180 0 l 0 -490 z"></path>
+                   <circle cx="110" cy="100" r="75" id="crl" style="fill: black"></circle>
+                   <circle cx="110" cy="260" r="75" id="cyl" style="fill: black"></circle>
+                   <circle cx="110" cy="420" r="75" id="cgl" style="fill: black"></circle>
+                </g>
+             </svg>
+        </div>
+        <div id="pedestrian-light">
+            <h5>Jalakäijate tuli</h5>
+            <svg class="traffic_light">
+                <g stroke="black" fill="#333">
+                   <path d="m10 10 l 0 340 l 200 0 l 0 -340 z"></path>
+                   <path fill="#444" d="m20 20 l 0 320 l 180 0 l 0 -320 z"></path>
+                   <circle cx="110" cy="100" r="75" id="prl" style="fill: black"></circle>
+                   <circle cx="110" cy="260" r="75" id="pgl" style="fill: black"></circle>
+                </g>
+             </svg>
+            <button type="button" id="pedestrian-button">Ülekäik</button>
+        </div>
+    </body>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
+
+<style>
+
+    #main-container {
+        width: 100%;
+        height: 600px;
+        display: flex;
+        flex-direction: row;
+    }
+    #main-light {
+        width:50%;
+    }
+
+    .traffic_light {
+        height: 100%;
+    }
+</style>

@@ -1,8 +1,10 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get } from 'firebase/database';
+import { getDatabase, ref, get, onValue } from 'firebase/database';
 
-const api_url = 'https://orca-app-tlr83.ondigitalocean.app/';
 
+const board_id = location.pathname.split('/')[1];
+//const api_url = 'https://orca-app-tlr83.ondigitalocean.app/get_start_time/';
+const api_url = 'http://localhost:3000/get_start_time/';
 
 const firebaseConfig = {
     apiKey: "AIzaSyBt0s4jGLD1k3_p8SfGS4yhoil0BKmZgKE",
@@ -22,11 +24,9 @@ const YELLOW = 'yellow';
 const GREEN = 'green';
 const BLACK = 'black';
 
-const cycle_length = 20 * 1000;
-const red_length = cycle_length * 0.5;
-const yellow_length = cycle_length * 0.05;
-const green_length = cycle_length * 0.25;
-const green_blink_length = cycle_length * 0.033;
+let cycle_length = 20 * 1000;
+
+const light_ids = ['crl', 'cyl', 'cgl'];
 
 const cycle_timer = 'cycle';
 let start_time;
@@ -37,8 +37,17 @@ let fetched_next_start = false;
 let pedestrian_button_state = 0;
 
 let main_light_offsets = [];
+let is_yellow_mode = false;
+
+let yellow_cycle_interval;
+let regular_cycle_interval;
 
 const calculateOffsets = () => {
+    const red_length = cycle_length * 0.5;
+    const yellow_length = cycle_length * 0.05;
+    const green_length = cycle_length * 0.25;
+    const green_blink_length = cycle_length * 0.033;
+
     const d_red = red_length;
     const d_yellow = d_red + yellow_length;
     const d_green = d_yellow + green_length;
@@ -145,7 +154,6 @@ const activateLight = (color, light_id) => {
     light.style.fill = color;
 }
 
-
 const resetCycle = async () => {
     calculateOffsets();
     fetched_next_start = false;
@@ -157,16 +165,12 @@ const fetchInitialStartTime = async () => {
     const response = await fetch(api_url + Number(light_id));
     const data = await response.json();
 
-    console.log(data);
     return data.start;
 }
 
 const fetchStartTime = () => {
-    console.log('fetchingStartTime');
-    const light_id  = location.pathname.split('/')[1];
-    fetch(api_url + Number(light_id)).then((response) => {
+    fetch(api_url + Number(board_id)).then((response) => {
         response.json().then((data) => {
-            console.log('new start_time: ', data.start);
             next_start_time = data.start;
         }).catch((err) => {
             console.error('Error while parsing json: ', err);
@@ -180,6 +184,17 @@ const fetchStartTime = () => {
 
 const isOffsetLessAtnIndexFromLast = (elapsed_time, n) => {
     return elapsed_time < main_light_offsets[main_light_offsets.length - n].offset;
+}
+
+const yellowCycle = () => {
+    const elapsed_time = Date.now() - start_time;
+    if (elapsed_time < 500) {
+        activateLight(YELLOW, 'cyl');
+    } else if (elapsed_time < 1000) {
+        activateLight(BLACK, 'cyl');
+    } else {
+        start_time += 2000;
+    }
 }
 
 const regularCycle = () => {
@@ -212,11 +227,56 @@ const regularCycle = () => {
         }
     }
     if (isOffsetLessAtnIndexFromLast(elapsed_time, 2) && pedestrian_button_state) pedestrian_button_state = 0;
-    if (elapsed_time > main_light_offsets[7].offset && !fetched_next_start) fetchStartTime();
+    if (elapsed_time > main_light_offsets[main_light_offsets.length - 2].offset && !fetched_next_start) fetchStartTime();
     if (elapsed_time > main_light_offsets[0].offset) resetCycle();
 }
 
-start_time = await fetchInitialStartTime();
-calculateOffsets();
-setInterval(regularCycle, 100);
+const startRegularCycle = async () => {
+    console.log('regular_cycle');
+    start_time = await fetchInitialStartTime();
+    calculateOffsets();
+    regular_cycle_interval = setInterval(regularCycle, 100);
+}
+
+const startYellowCycle = () => {
+    console.log('yellow_cycle');
+    start_time = Date.now();
+    yellow_cycle_interval = setInterval(yellowCycle, 100);
+}
+
+const resetLights = () => {
+    light_ids.forEach((light_id) => {
+        activateLight(BLACK, light_id);
+    })
+}
+
+onValue(ref(db, `traffic_lights/automatic/${board_id}`), (snapshot) => {
+    console.log('onValue called');
+    const is_yellow = Boolean(snapshot.val());
+
+    if (is_yellow) {
+        clearInterval(regular_cycle_interval);
+        resetLights();
+        startYellowCycle();
+    } else {
+        clearInterval(yellow_cycle_interval);
+        resetLights();
+        startRegularCycle();
+    }
+})
+
+onValue(ref(db, 'traffic_lights/cycleLength'), (snapshot) => {
+    const db_cycle_length = snapshot.val();
+    console.log(db_cycle_length);
+    cycle_length = db_cycle_length;
+})
+
+console.log('is_yellow_mode: ', is_yellow_mode);
+/*
+if (!is_yellow_mode) {
+    await startRegularCycle();
+} else {
+    startYellowCycle();
+}
+*/
 

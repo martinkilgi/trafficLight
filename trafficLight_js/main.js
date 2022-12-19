@@ -212,6 +212,15 @@ const regularCycle = () => {
     if (elapsed_time > main_light_offsets[0].offset) resetCycle();
 }
 
+const sendData = () => {
+    const lightId = document.getElementById("lightId").value;
+    const state = document.getElementById("lightState").value;
+    console.log(lightId);
+}
+
+document.getElementById('sendButton')
+    .addEventListener('click', sendData, false);
+
 start_time = await fetchInitialStartTime();
 calculateOffsets();
 setInterval(regularCycle, 100);

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite App</title>
+  </head>
+  <body>
+    <body id="main-container">
+        <div id="state">
+            <h2>Configure traffic light</h2>
+            <p>0 - Martin's Arduino</p>
+            <p>1 - Mait's Arduino</p>
+            <p>2 - Martin's web traffic light</p>
+            <p>3 - Mait's web traffic light</p>
+            <br />
+            <input type="text" id="lightState" placeholder="Automatic or not" />
+            <br />
+            <input type="text" id="lightId" placeholder="Light ID" />
+            <br />
+            <button type="button" id="sendStateDataButton">Send</button>
+        </div>
+        <div>
+            <h2>Set cycle length</h2>
+            <br />
+            <input type="text" id="cycleLength" placeholder="Cycle length...." />
+            <br />
+            <button type="button" id="sendCycleDataButton">Set cycle</button>
+        </div>
+        <div>
+            <h2>Configure green wave</h2>
+            <input type="text" id="waveToggle" placeholder="0 or 1" />
+            <br />
+            <input type="text" id="waveLength" placeholder="Wave length...." />
+            <br />
+            <button type="button" id="sendWaveDataButton">Set wave</button>
+        </div>
+    </body>
+    <script type="module" src="/dataToFb.js"></script>
+  </body>
+</html>

@@ -40,18 +40,19 @@ enum CycleState {
 
 int trafficLightId = 0;
 
-int cycle_length = 10 * 1000;
+int cycle_length = 20 * 1000;
 int cycle_type = CycleType::REGULAR;
 
 int red_length = cycle_length * 0.5;
 int yellow_length = cycle_length * 0.05;
-int green_length = cycle_length * 0.3;
-
+int green_length = cycle_length * 0.25;
 int green_blink_length = cycle_length * 0.033;
 
 int cycle_start = millis();
 unsigned long offsetTime;
 unsigned long startMillis;
+unsigned long startMillisBuf;
+unsigned long timeNow;
 CycleState state;
 
 // Set your Static IP address
@@ -63,10 +64,17 @@ IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
 
+const uint16_t traffic_light_id = 1;
+bool firstRequest = true;
+
+const char* cycle_length_url = "https://orca-app-tlr83.ondigitalocean.app/get_cycle_length";
+const char* yellow_toggle_url = "https://orca-app-tlr83.ondigitalocean.app/get_yellow_state/0";
+const char* start_time_url = "https://orca-app-tlr83.ondigitalocean.app/get_arduino_start/0";
+
 void calculateLightLengths() {
   red_length = cycle_length * 0.5;
   yellow_length = cycle_length * 0.05;
-  green_length = cycle_length * 0.3;
+  green_length = cycle_length * 0.25;
   green_blink_length = cycle_length * 0.033;
 }
 
@@ -93,6 +101,30 @@ void sendStartTime() {
   }  
 }
 
+void getStartTime(BearSSL::WiFiClientSecure client) {
+  const char* start_time_url = "https://orca-app-tlr83.ondigitalocean.app/get_arduino_start/0";
+  HTTPClient https;
+  Serial.println("Getting start time for Arduino in function....");
+  if (https.begin(client, start_time_url)) {
+    int httpCode = https.GET();
+    Serial.print("Status code: ");
+    Serial.println(httpCode);
+
+    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+      StaticJsonDocument<200> doc;
+      String payload = https.getString();
+      DeserializationError error = deserializeJson(doc, payload);
+      String startTime = doc["start"];
+      Serial.println("firstReq: " + firstRequest);
+      if (firstRequest) {
+        startMillis = startTime.toInt() - 1365;
+      } else {
+        startMillisBuf = startTime.toInt() - 1365;
+      }
+    }
+  }
+}
+
 void setup() {
   pinMode(P_SWITCH, INPUT);
 
@@ -110,8 +142,6 @@ void setup() {
     Serial.println("STA Failed to configure");
   }
 
-  delay(2000);
-
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   while (WiFi.status() != WL_CONNECTED)
@@ -120,8 +150,12 @@ void setup() {
     Serial.println(".");
   }
 
-  delay(2000);
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setFingerprint(fingerprintDo);
+
   sendStartTime();
+  getStartTime(*client);
+  firstRequest = false;
 }
 
 void resetLights() {
@@ -169,7 +203,7 @@ void pedestrianLight(int pedestrian_input, CycleState cycle_state) {
 }
 
 
-void regularCycle(int current_millis) {
+void regularCycle(int current_millis, BearSSL::WiFiClientSecure client) {
   if (state == START) {
     cycle_start = millis();
 
@@ -201,12 +235,13 @@ void regularCycle(int current_millis) {
     pedestrianLight(pedestrian_input, state);
 
     state = GREEN;
+    getStartTime(client);
   } else if (current_millis > (d_green - d_green_blinks[0]) && state == CycleState::GREEN) {
     if (current_millis > d_green_blinks[0]) {
       digitalWrite(LED_GC, LOW);
       digitalWrite(LED_YC, HIGH);
-      //pedestrianLight(pedestrian_input, state);
-      //state = START;
+      pedestrianLight(pedestrian_input, state);
+      state = START;
       state = END;
     } else if (current_millis > (d_green_blinks[0] - (green_blink_length / 2))) {
       digitalWrite(LED_GC, HIGH);
@@ -222,48 +257,28 @@ void regularCycle(int current_millis) {
   } else if (current_millis > d_yellow_ag && state == CycleState::END) {
       digitalWrite(LED_YC, LOW);
       pedestrianLight(pedestrian_input, state);
+      startMillis = startMillisBuf - 1365;
       state = START;
   }
 }
 
-const uint16_t traffic_light_id = 1;
-
-const char* cycle_length_url = "https://orca-app-tlr83.ondigitalocean.app/get_cycle_length";
-const char* yellow_toggle_url = "https://orca-app-tlr83.ondigitalocean.app/get_yellow_state/0";
-const char* start_time_url = "https://orca-app-tlr83.ondigitalocean.app/get_arduino_start/0";
 
 void loop() {
-  time_t time = now();
-  startMillis = millis();
+  unsigned long tempOffsetTime = 0;
+  timeNow = millis();
+  Serial.print("start: ");
+  Serial.print(timeNow);
+  Serial.print("offset: ");
+  Serial.print(startMillis);
+  Serial.print("dyellowg: ");
+  Serial.print(d_yellow_ag);
   if (WiFiMulti.run() == WL_CONNECTED) {
     std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
     client->setFingerprint(fingerprintDo);
     HTTPClient https;
+    // getStartTime(*client);
 
-    Serial.println("Getting start time for Arduino....");
-    if (https.begin(*client, start_time_url)) {
-      int httpCode = https.GET();
-      Serial.print("Status code: ");
-      Serial.println(httpCode);
-
-      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-        Serial.print("Offset: ");
-        StaticJsonDocument<200> doc;
-        String payload = https.getString();
-        DeserializationError error = deserializeJson(doc, payload);
-        Serial.print(payload);
-        // if (error) {
-        //   Serial.print(F("deserializeJson() failed: "));
-        //   Serial.println(error.f_str());
-        //   return;
-        // }
-        String startTime = doc["start"];
-        offsetTime = startTime.toInt();
-      }
-    }
-
-    if (startMillis > offsetTime) {
-      Serial.println("Starting GET req for yellow_toggle_url");
+    if (timeNow >= startMillis) {
       if (https.begin(*client, yellow_toggle_url)) {
         int httpCode = https.GET();
         Serial.print("Status code: ");
@@ -313,7 +328,7 @@ void loop() {
 
       switch (cycle_type) {
         case CycleType::REGULAR:
-          regularCycle(startMillis);
+          regularCycle(timeNow, *client);
         break;
         case CycleType::NIGHT:
           yellowCycle();

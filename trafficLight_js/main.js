@@ -164,6 +164,7 @@ const fetchInitialStartTime = async () => {
     const light_id  = location.pathname.split('/')[1];
     const response = await fetch(api_url + Number(light_id));
     const data = await response.json();
+    console.log('initial start: ', data.start);
 
     return data.start;
 }
@@ -172,6 +173,7 @@ const fetchStartTime = () => {
     fetch(api_url + Number(board_id)).then((response) => {
         response.json().then((data) => {
             next_start_time = data.start;
+            console.log('next_start: ', next_start_time);
         }).catch((err) => {
             console.error('Error while parsing json: ', err);
         });
@@ -227,8 +229,10 @@ const regularCycle = () => {
         }
     }
     if (isOffsetLessAtnIndexFromLast(elapsed_time, 2) && pedestrian_button_state) pedestrian_button_state = 0;
-    if (elapsed_time > main_light_offsets[main_light_offsets.length - 2].offset && !fetched_next_start) fetchStartTime();
+    //if (elapsed_time > main_light_offsets[main_light_offsets.length - 2].offset && !fetched_next_start) fetchStartTime();
     if (elapsed_time > main_light_offsets[0].offset) resetCycle();
+
+    if (elapsed_time > 200 && !fetched_next_start) fetchStartTime();
 }
 
 const startRegularCycle = async () => {

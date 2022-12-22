@@ -1,5 +1,7 @@
 # IoT valgusfooride projekt
 
+Projekti eesmärgiks oli luua füüsiline valgusfoor koos LEDide ja NodeMCU-ga ning ka virtuaalsed foorid, mis asuksid netis.
+Lõpptulemusena pidid foorid oskama üksteisega arvestama ning neid pidi saama seadistada.
 Kood on kommenteeritud ja seletatud failide sees.
 
 Link serveri koodile: https://github.com/martinkilgi/traffic_light_api

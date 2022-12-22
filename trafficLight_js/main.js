@@ -1,10 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, onValue } from 'firebase/database';
 
-
+// Võetakse URL-ist foori ID, mis tähendab, et tuleb minna aadressile "{baseaddress}/{id}"
 const board_id = location.pathname.split('/')[1];
-//const api_url = 'https://orca-app-tlr83.ondigitalocean.app/get_start_time/';
-const api_url = 'http://localhost:3000/get_start_time/';
+const api_url = 'https://orca-app-tlr83.ondigitalocean.app/get_start_time/';
 
 const firebaseConfig = {
     apiKey: "AIzaSyBt0s4jGLD1k3_p8SfGS4yhoil0BKmZgKE",
@@ -24,6 +23,7 @@ const YELLOW = 'yellow';
 const GREEN = 'green';
 const BLACK = 'black';
 
+// Vaikimisi tsyklipikkus_length muutujasse.
 let cycle_length = 20 * 1000;
 
 const light_ids = ['crl', 'cyl', 'cgl'];
@@ -42,6 +42,7 @@ let is_yellow_mode = false;
 let yellow_cycle_interval;
 let regular_cycle_interval;
 
+//
 const calculateOffsets = () => {
     const red_length = cycle_length * 0.5;
     const yellow_length = cycle_length * 0.05;
@@ -149,17 +150,22 @@ const pedestrianButton = () => {
 document.getElementById('pedestrian-button')
     .addEventListener('click', pedestrianButton, false);
 
+// Abifunktsioon, mis aktiveerib vastavalt sisseantud foori IDle ja värvile vastava
+// foori õige värviga.
 const activateLight = (color, light_id) => {
     const light = document.getElementById(light_id);
     light.style.fill = color;
 }
 
+// Arvutab uuesti foori tulede põlemise kestvused, määrab, et uut aega ei ole päritud
+// ning paneb start_time muutujasse eelnevalt setitud next_start_time väärtuse.
 const resetCycle = async () => {
     calculateOffsets();
     fetched_next_start = false;
     start_time = next_start_time;
 }
 
+// Vastavalt foori IDle küsib serverilt tema uue algusaja, et ta ühildusk teiste fooridega ning tagastab selle.
 const fetchInitialStartTime = async () => {
     const light_id  = location.pathname.split('/')[1];
     const response = await fetch(api_url + Number(light_id));
@@ -169,6 +175,8 @@ const fetchInitialStartTime = async () => {
     return data.start;
 }
 
+// Vastavalt foori IDle küsib serverilt uue algusaja, see pannakse next_start_time muutujasse
+// ning määratakse et uus aeg on päritud.
 const fetchStartTime = () => {
     fetch(api_url + Number(board_id)).then((response) => {
         response.json().then((data) => {
@@ -184,10 +192,13 @@ const fetchStartTime = () => {
     fetched_next_start = true;
 }
 
+// Kontrollib, kas algusest möödunud aeg on väiksem väärtus kui funktsiooni sisseantud indeksi kohal main_light_offsets massiivis
+// oleva elemendi offset.
 const isOffsetLessAtnIndexFromLast = (elapsed_time, n) => {
     return elapsed_time < main_light_offsets[main_light_offsets.length - n].offset;
 }
 
+// Tegeleb foori kollase vilkuva tule režiimiga.
 const yellowCycle = () => {
     const elapsed_time = Date.now() - start_time;
     if (elapsed_time < 500) {
@@ -199,11 +210,16 @@ const yellowCycle = () => {
     }
 }
 
+// Põhitsükkel, kus toimub foori tegevuse kontrollimine.
 const regularCycle = () => {
     const elapsed_time = Date.now() - start_time;
+    // Käiakse kõik main_light_offsets massiivis olevad elemendid läbi
     for (const light_offset of main_light_offsets) {
+        // Kui vastava elemendi seisund on 0 ja algusest möödunud aeg on suurem kui selle elemendi offset
         if (light_offset.state == 0 && elapsed_time > light_offset.offset) {
 
+            // Pannakse käsitletava elemendi seisund üheks, võetakse tema värv ning fooritule ID ning 
+            // pannakse nende järgi vastav tuli põlema.
             for (let i = 0; i < light_offset.light.length; ++i) {
                 light_offset.state = 1;
                 const color = light_offset.color[i];
@@ -212,6 +228,8 @@ const regularCycle = () => {
                 
             }
 
+            // Kontrollib, kas on jalakäijate ülekäigu nuppu vajutatud ning kas elemendil on olemas jalakäijate jaoks loodud atribuut.
+            // Kui on, võetakse vastav jalakäija foori ID ja värv ning aktiveeritakse vastavad tuled.
             if (pedestrian_button_state && light_offset.pedestrian_light) {
                 const pedestrian_light_ids = light_offset.pedestrian_light.light;
                 const pedestrian_light_colors = light_offset.pedestrian_light.color;
@@ -223,18 +241,19 @@ const regularCycle = () => {
                     activateLight(pedestrian_color, pedestrian_light_id);
                 }
             } else {
+                // Kui ei ole, pannakse lihtsalt jalakäijafoor punaseks.
                 activateLight(RED, 'prl');
                 activateLight(BLACK, 'pgl');
             }
         }
     }
     if (isOffsetLessAtnIndexFromLast(elapsed_time, 2) && pedestrian_button_state) pedestrian_button_state = 0;
-    //if (elapsed_time > main_light_offsets[main_light_offsets.length - 2].offset && !fetched_next_start) fetchStartTime();
     if (elapsed_time > main_light_offsets[0].offset) resetCycle();
-
     if (elapsed_time > 200 && !fetched_next_start) fetchStartTime();
 }
 
+// Päritakse algusaeg, mis salvestatakse start_time muutujasse, arvutatakse foor tulede põlemise kestvused
+// ning käivitatakse tavaline foori tsükkel
 const startRegularCycle = async () => {
     console.log('regular_cycle');
     start_time = await fetchInitialStartTime();
@@ -242,21 +261,27 @@ const startRegularCycle = async () => {
     regular_cycle_interval = setInterval(regularCycle, 100);
 }
 
+// Pannakse start_time muutujasse praegune aeg ning käivitatakse kollase vilkuva tule tsükkel.
 const startYellowCycle = () => {
     console.log('yellow_cycle');
     start_time = Date.now();
     yellow_cycle_interval = setInterval(yellowCycle, 100);
 }
 
+// Käiakse kõik tuled läbi ning pannakse kõik kustu.
 const resetLights = () => {
     light_ids.forEach((light_id) => {
         activateLight(BLACK, light_id);
     })
 }
 
+// Skännitakse baasi automatic vastava foori ID-ga välja
+// Kui seal väärtus muutub, kontrollitakse, kas vastus on 0 või 1 ehk kas töötab automaatselt või
+// on kollase tule vilkuvas režiimis.
 onValue(ref(db, `traffic_lights/automatic/${board_id}`), (snapshot) => {
     console.log('onValue called');
     const is_yellow = Boolean(snapshot.val());
+    console.log("yellow:" + is_yellow);
 
     if (is_yellow) {
         clearInterval(regular_cycle_interval);
@@ -269,18 +294,11 @@ onValue(ref(db, `traffic_lights/automatic/${board_id}`), (snapshot) => {
     }
 })
 
+// Skännitakse baasi cycleLength välja
+// Kui seal väärtus muutub, kirjutatakse vastav väärtus cycle_length muutujasse.
 onValue(ref(db, 'traffic_lights/cycleLength'), (snapshot) => {
     const db_cycle_length = snapshot.val();
     console.log(db_cycle_length);
     cycle_length = db_cycle_length;
 })
-
-console.log('is_yellow_mode: ', is_yellow_mode);
-/*
-if (!is_yellow_mode) {
-    await startRegularCycle();
-} else {
-    startYellowCycle();
-}
-*/
 
